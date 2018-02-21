@@ -1,0 +1,14 @@
+{
+  "name": "purescript_2048",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "pulp build -O -m Main -I test -t html/main.js && open html/index.html"
+  },
+  "author": "jarnura",
+  "license": "ISC"
+}

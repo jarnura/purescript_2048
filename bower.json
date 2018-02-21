@@ -1,0 +1,21 @@
+{
+ "name": "practicefrp",
+ "ignore": [
+   "**/.*",
+   "node_modules",
+   "bower_components",
+   "output"
+ ],
+ "dependencies": {
+   "purescript-prelude": "^3.1.1",
+   "purescript-console": "^3.0.0",
+   "purescript-behaviors": "^6.3.0",
+   "purescript-colors": "^4.3.0",
+   "purescript-drawing": "^3.0.0",
+   "purescript-neon": "^0.6.0",
+    "purescript-uint": "^0.5.0"
+ },
+ "devDependencies": {
+   "purescript-psci-support": "^3.0.0"
+ }
+}
