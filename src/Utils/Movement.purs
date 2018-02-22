@@ -2,292 +2,73 @@ module Utils.Movement where
 
 import Prelude
 
-import Neon.Operator (_and, _or)
+import Neon.Operator (_and)
 import Data.Array (foldl)
 
-import Utils.Common (boolean, getValFromMatrix, matSize, updateMatrix')
+import Utils.Common (Index , Directions , FinalCellData , boolean, getValFromMatrix, updateMatrix' , makeIndex , mkFinalCellData)
+import Utils.Config (nextMove , isOutOfBounds , mkDrawbackFinalCellData)
 
-type FinalCellData = {val :: Int , index :: Int}
+updateMatrix :: Array (Array Int) -> Index -> Index -> Int -> Array (Array Int)
+updateMatrix matrixBox currentPoint nextPoint valToUpdate =
+	let updateCurrentRow = updateMatrix' matrixBox currentPoint valToUpdate in
+	updateMatrix' updateCurrentRow nextPoint 0
 
-updateMatrix :: Array (Array Int) -> Int -> Int -> Int -> Int -> Int -> Array (Array Int)
-updateMatrix matrixBox rowIndex rowIndexToReplace colIndex colIndexToReplace valToUpdate =
-	let updateCurrentRow = updateMatrix' matrixBox rowIndex colIndex valToUpdate in
-	updateMatrix' updateCurrentRow rowIndexToReplace colIndexToReplace 0
-
-
-mkFinalCellData :: Int -> Int -> FinalCellData
-mkFinalCellData val index = {val , index}
-
-moveUp :: Array Int -> Array Int -> Array (Array Int) -> Array (Array Int)
-moveUp rowRange colRange previousBox =
+move :: Directions -> Array Int -> Array Int -> Array (Array Int) -> Array (Array Int)
+move directions rowRange colRange previousBox =
 	let updatedMatrix = foldl updateColVal previousBox rowRange in
 	foldl removeIntermediateZeros updatedMatrix rowRange
 	where
-		
 		updateColVal :: Array (Array Int) -> Int -> Array (Array Int)
-		updateColVal matrixBox rowIndex = foldl (updateCurrentCell rowIndex) matrixBox colRange
+		updateColVal matrixBox rowIndex = foldl (updateCurrentCell' rowIndex) matrixBox colRange
 
-		updateCurrentCell :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		updateCurrentCell rowIndex matrixBox colIndex = 
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			let	nextVal = getNextNonZeroValue matrixBox (rowIndex + 1) colIndex in
+		updateCurrentCell' :: Int -> Array (Array Int) -> Int -> Array (Array Int)
+		updateCurrentCell' rowIndex matrixBox = updateCurrentCell matrixBox <<< makeIndex rowIndex
+
+		updateCurrentCell :: Array (Array Int) -> Index -> Array (Array Int)
+		updateCurrentCell matrixBox point = 
+			let currentVal = getValFromMatrix matrixBox point in
+			let	nextVal = getNextNonZeroValue matrixBox (nextMove directions point) in
 			boolean (const $ matrixBox) (const $ trueCallback nextVal currentVal) (boolCondition currentVal nextVal) 
 			where
 				trueCallback :: FinalCellData -> Int -> Array (Array Int)
-				trueCallback nextVal currentVal = updateMatrix matrixBox rowIndex nextVal.index colIndex colIndex (currentVal+nextVal.val)
+				trueCallback nextVal currentVal = updateMatrix matrixBox point nextVal.index (currentVal+nextVal.val)
 
 				boolCondition :: Int -> FinalCellData -> Boolean
 				boolCondition currentVal nextVal = (_and (eq currentVal nextVal.val) (currentVal /= 0))
 
-		getNextNonZeroValue :: Array (Array Int) -> Int -> Int -> FinalCellData
-		getNextNonZeroValue matrixBox rowIndex colIndex
-			| eq rowIndex matSize = mkFinalCellData 0 (matSize-1)
+		getNextNonZeroValue :: Array (Array Int) -> Index -> FinalCellData
+		getNextNonZeroValue matrixBox point
+			| isOutOfBounds directions point = mkDrawbackFinalCellData directions point
 			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback) (const $ mkFinalCellData currentVal rowIndex) (currentVal /= 0)
+				let currentVal = getValFromMatrix matrixBox point in
+				boolean (const $ falseCallback) (const $ mkFinalCellData currentVal point) (currentVal /= 0)
 			where
 				falseCallback :: FinalCellData
-				falseCallback = getNextNonZeroValue matrixBox (rowIndex+1) colIndex
+				falseCallback = getNextNonZeroValue matrixBox (nextMove directions point)
 
 		removeIntermediateZeros :: Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros matrixBox rowIndex = foldl (removeIntermediateZeros' rowIndex) matrixBox colRange
+		removeIntermediateZeros matrixBox rowIndex = foldl (removeIntermediateZeros'' rowIndex) matrixBox colRange
 
-		removeIntermediateZeros' :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros' rowIndex matrixBox colIndex =
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
+		removeIntermediateZeros'' :: Int -> Array (Array Int) -> Int -> Array (Array Int)
+		removeIntermediateZeros'' rowIndex matrixBox = removeIntermediateZeros' matrixBox <<< makeIndex rowIndex
+
+		removeIntermediateZeros' :: Array (Array Int) -> Index -> Array (Array Int)
+		removeIntermediateZeros' matrixBox point =
+			let currentVal = getValFromMatrix matrixBox point in
 			boolean (const $ matrixBox) (const $ trueCallback) (eq 0 currentVal)
 			where
 				trueCallback :: Array (Array Int)
-				trueCallback = replaceNextNonZeroValue matrixBox rowIndex (rowIndex+1) colIndex
+				trueCallback = replaceNextNonZeroValue matrixBox point (nextMove directions point)
 
-		replaceNextNonZeroValue :: Array (Array Int) -> Int -> Int -> Int -> Array (Array Int)
-		replaceNextNonZeroValue matrixBox stagedRowIndex rowIndex colIndex
-			| eq rowIndex matSize = matrixBox
+		replaceNextNonZeroValue :: Array (Array Int) -> Index -> Index -> Array (Array Int)
+		replaceNextNonZeroValue matrixBox startPoint currentPoint
+			| isOutOfBounds directions currentPoint = matrixBox
 			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
+				let currentVal = getValFromMatrix matrixBox currentPoint in
 				boolean (const $ falseCallback) (const $ trueCallback currentVal) (currentVal /= 0)
 				where
 					falseCallback :: Array (Array Int)
-					falseCallback = replaceNextNonZeroValue matrixBox stagedRowIndex (rowIndex+1) colIndex
+					falseCallback = replaceNextNonZeroValue matrixBox startPoint (nextMove directions currentPoint)
 
 					trueCallback :: Int -> Array (Array Int)
-					trueCallback currentVal = updateMatrix matrixBox stagedRowIndex rowIndex colIndex colIndex currentVal
-
-moveDown :: Array Int -> Array Int  -> Array (Array Int) -> Array (Array Int)
-moveDown rowRange colRange previousBox =
-	let updatedMatrix = foldl updateColVal previousBox rowRange in
-	foldl removeIntermediateZeros updatedMatrix rowRange
-	where
-		updateColVal :: Array (Array Int) -> Int -> Array (Array Int)
-		updateColVal matrixBox rowIndex = foldl (updateCurrentCell rowIndex) matrixBox colRange
-
-		updateCurrentCell :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		updateCurrentCell rowIndex matrixBox colIndex = 
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			let	nextVal = getNextNonZeroValue matrixBox (rowIndex - 1) colIndex in
-			boolean (const $ matrixBox) (const $ trueCallback nextVal currentVal) (boolCondition currentVal nextVal) 
-			where
-				trueCallback :: FinalCellData -> Int -> Array (Array Int)
-				trueCallback nextVal currentVal = updateMatrix matrixBox rowIndex nextVal.index colIndex colIndex (currentVal+nextVal.val)
-
-				boolCondition :: Int -> FinalCellData -> Boolean
-				boolCondition currentVal nextVal = (_and (eq currentVal nextVal.val) (currentVal /= 0))
-
-		getNextNonZeroValue :: Array (Array Int) -> Int -> Int -> FinalCellData
-		getNextNonZeroValue matrixBox rowIndex colIndex
-			| eq rowIndex (-1) = mkFinalCellData 0 0
-			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback) (const $ mkFinalCellData currentVal rowIndex) (currentVal /= 0)
-			where
-				falseCallback :: FinalCellData
-				falseCallback = getNextNonZeroValue matrixBox (rowIndex-1) colIndex
-
-		removeIntermediateZeros :: Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros matrixBox rowIndex = foldl (removeIntermediateZeros' rowIndex) matrixBox colRange
-
-		removeIntermediateZeros' :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros' rowIndex matrixBox colIndex =
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			boolean (const $ matrixBox) (const $ trueCallback) (eq 0 currentVal)
-			where
-				trueCallback :: Array (Array Int)
-				trueCallback = replaceNextNonZeroValue matrixBox rowIndex (rowIndex-1) colIndex
-
-		replaceNextNonZeroValue :: Array (Array Int) -> Int -> Int -> Int -> Array (Array Int)
-		replaceNextNonZeroValue matrixBox stagedRowIndex rowIndex colIndex
-			| eq rowIndex (-1) = matrixBox
-			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback) (const $ trueCallback currentVal) (currentVal /= 0)
-				where
-					falseCallback :: Array (Array Int)
-					falseCallback = replaceNextNonZeroValue matrixBox stagedRowIndex (rowIndex-1) colIndex
-
-					trueCallback :: Int -> Array (Array Int)
-					trueCallback currentVal = updateMatrix matrixBox stagedRowIndex rowIndex colIndex colIndex currentVal
-
-moveLeft :: Array Int -> Array Int -> Array (Array Int) -> Array (Array Int)
-moveLeft rowRange colRange previousBox =
-	let updatedMatrix = foldl updateColVal previousBox rowRange in
-	foldl removeIntermediateZeros updatedMatrix rowRange
-	where
-		updateColVal :: Array (Array Int) -> Int -> Array (Array Int)
-   		updateColVal matrixBox rowIndex = foldl (updateCurrentCell rowIndex) matrixBox colRange
-
-		updateCurrentCell :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		updateCurrentCell rowIndex matrixBox colIndex = 
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			let	nextVal = getNextNonZeroValue matrixBox rowIndex (colIndex+1) in
-			boolean (const $ matrixBox) (const $ trueCallback nextVal currentVal) (boolCondition currentVal nextVal)
-			where
-				trueCallback :: FinalCellData -> Int -> Array (Array Int)
-				trueCallback nextVal currentVal = updateMatrix matrixBox rowIndex rowIndex colIndex nextVal.index (currentVal+nextVal.val)
-
-				boolCondition :: Int -> FinalCellData -> Boolean
-				boolCondition currentVal nextVal = (_and (eq currentVal nextVal.val) (currentVal /= 0))
-
-		getNextNonZeroValue :: Array (Array Int) -> Int -> Int -> FinalCellData
-		getNextNonZeroValue matrixBox rowIndex colIndex
-			| eq colIndex matSize = mkFinalCellData 0 (matSize-1)
-			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback) (const $ mkFinalCellData currentVal colIndex) (currentVal /= 0)
-			where
-				falseCallback :: FinalCellData
-				falseCallback = getNextNonZeroValue matrixBox rowIndex (colIndex+1)
-
-
-		removeIntermediateZeros :: Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros matrixBox rowIndex = foldl (removeIntermediateZeros' rowIndex) matrixBox colRange
-
-		removeIntermediateZeros' :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros' rowIndex matrixBox colIndex =
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			boolean (const $ matrixBox) (const $ trueCallback) (eq 0 currentVal)
-			where
-				trueCallback :: Array (Array Int)
-				trueCallback = replaceNextNonZeroValue matrixBox rowIndex colIndex (colIndex+1)
-
-		replaceNextNonZeroValue :: Array (Array Int) -> Int -> Int -> Int -> Array (Array Int)
-		replaceNextNonZeroValue matrixBox rowIndex stagedColIndex colIndex
-			| eq colIndex matSize = matrixBox
-			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback) (const $ trueCallback currentVal) (currentVal /= 0)
-				where
-					falseCallback :: Array (Array Int)
-					falseCallback = replaceNextNonZeroValue matrixBox rowIndex stagedColIndex (colIndex+1)
-
-					trueCallback :: Int -> Array (Array Int)
-					trueCallback currentVal = updateMatrix matrixBox rowIndex rowIndex stagedColIndex colIndex currentVal
-
-moveRight :: Array Int -> Array Int -> Array (Array Int) -> Array (Array Int)
-moveRight rowRange colRange previousBox =
-	let updatedMatrix = foldl updateColVal previousBox rowRange in
-	foldl removeIntermediateZeros updatedMatrix rowRange
-	where
-		updateColVal :: Array (Array Int) -> Int -> Array (Array Int)
-  		updateColVal matrixBox rowIndex = foldl (updateCurrentCell rowIndex) matrixBox colRange
-
-		updateCurrentCell :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		updateCurrentCell rowIndex matrixBox colIndex = 
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			let	nextVal = getNextNonZeroValue matrixBox rowIndex (colIndex-1) in
-			boolean (const $ matrixBox) (const $ trueCallback nextVal currentVal) (boolCondition currentVal nextVal)
-			where
-				trueCallback :: FinalCellData -> Int -> Array (Array Int)
-				trueCallback nextVal currentVal = updateMatrix matrixBox rowIndex rowIndex colIndex nextVal.index (currentVal+nextVal.val)
-
-				boolCondition :: Int -> FinalCellData -> Boolean
-				boolCondition currentVal nextVal = (_and (eq currentVal nextVal.val) (currentVal /= 0))
-
-		getNextNonZeroValue :: Array (Array Int) -> Int -> Int -> FinalCellData
-		getNextNonZeroValue matrixBox rowIndex colIndex
-			| eq colIndex (-1) = mkFinalCellData 0 (matSize-1)
-			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback) (const $ mkFinalCellData currentVal colIndex) (currentVal /= 0)
-			where
-				falseCallback :: FinalCellData
-				falseCallback = getNextNonZeroValue matrixBox rowIndex (colIndex-1)
-
-		removeIntermediateZeros :: Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros matrixBox rowIndex = foldl (removeIntermediateZeros' rowIndex) matrixBox colRange
-
-		removeIntermediateZeros' :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros' rowIndex matrixBox colIndex =
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			boolean (const $ matrixBox) (const $ trueCallback) (eq 0 currentVal)
-			where
-				trueCallback :: Array (Array Int)
-				trueCallback = replaceNextNonZeroValue matrixBox rowIndex colIndex (colIndex-1)
-
-		replaceNextNonZeroValue :: Array (Array Int) -> Int -> Int -> Int -> Array (Array Int)
-		replaceNextNonZeroValue matrixBox rowIndex stagedColIndex colIndex
-			| eq colIndex (-1) = matrixBox
-			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback) (const $ trueCallback currentVal ) (currentVal /= 0)
-				where
-					falseCallback :: Array (Array Int)
-					falseCallback = replaceNextNonZeroValue matrixBox rowIndex stagedColIndex (colIndex-1)
-
-					trueCallback :: Int -> Array (Array Int)
-					trueCallback currentVal = updateMatrix matrixBox rowIndex rowIndex stagedColIndex colIndex currentVal
-moveCommon :: Int -> Int -> Int -> Int -> Int -> Array Int -> Array Int -> Array (Array Int) -> Array ( Array Int )
-moveCommon directions rowUpdater colUpdater nonZeroCon replaceVal rowRange colRange previousBox  = 
-	let updatedMatrix = foldl updateColVal previousBox rowRange in
-	foldl removeIntermediateZeros updatedMatrix rowRange
-	where
-		updateColVal :: Array (Array Int) -> Int -> Array (Array Int)
-  		updateColVal matrixBox rowIndex = foldl (updateCurrentCell rowIndex) matrixBox colRange
-
-		updateCurrentCell :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		updateCurrentCell rowIndex matrixBox colIndex = 
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			let	nextVal = getNextNonZeroValue matrixBox (rowIndex + rowUpdater) (colIndex + colUpdater) in
-			boolean (const $ matrixBox) (const $ trueCallback nextVal currentVal ) (boolCondition currentVal nextVal)
-			where
-				trueCallback :: FinalCellData -> Int -> Array (Array Int)
-				trueCallback nextVal currentVal 
-					| (_or (eq directions 1) (eq directions 2) ) = updateMatrix matrixBox rowIndex nextVal.index colIndex colIndex (currentVal+nextVal.val)
-					| otherwise = updateMatrix matrixBox rowIndex rowIndex colIndex nextVal.index (currentVal+nextVal.val)
-
-				boolCondition :: Int -> FinalCellData -> Boolean
-				boolCondition currentVal nextVal = (_and (eq currentVal nextVal.val) (currentVal /= 0))
-
-		getNextNonZeroValue :: Array (Array Int) -> Int -> Int -> FinalCellData
-		getNextNonZeroValue matrixBox rowIndex colIndex
-			| eq colIndex nonZeroCon = mkFinalCellData 0 replaceVal
-			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback ) (const $ mkFinalCellData currentVal colIndex) (currentVal /= 0)
-			where
-				falseCallback :: FinalCellData
-				falseCallback = getNextNonZeroValue matrixBox (rowIndex + rowUpdater) (colIndex + colUpdater)
-
-		removeIntermediateZeros :: Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros matrixBox rowIndex = foldl (removeIntermediateZeros' rowIndex) matrixBox colRange
-
-		removeIntermediateZeros' :: Int -> Array (Array Int) -> Int -> Array (Array Int)
-		removeIntermediateZeros' rowIndex matrixBox colIndex =
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-			boolean (const $ matrixBox) (const $ trueCallback) (eq 0 currentVal)
-			where
-				trueCallback :: Array (Array Int)
-				trueCallback = replaceNextNonZeroValue matrixBox rowIndex (rowIndex+rowUpdater) colIndex (colIndex+colUpdater)
-
-		replaceNextNonZeroValue :: Array (Array Int) -> Int -> Int -> Int -> Int -> Array (Array Int)
-		replaceNextNonZeroValue matrixBox stagedRowIndex rowIndex stagedColIndex colIndex
-			| eq colIndex nonZeroCon = matrixBox
-			| otherwise = 
-				let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
-				boolean (const $ falseCallback) (const $ trueCallback currentVal ) (currentVal /= 0)
-				where
-					falseCallback :: Array (Array Int)
-					falseCallback = replaceNextNonZeroValue matrixBox stagedRowIndex (rowIndex+rowUpdater) stagedColIndex (colIndex+colUpdater)
-
-					trueCallback :: Int -> Array (Array Int)
-					trueCallback currentVal = updateMatrix matrixBox stagedRowIndex rowIndex stagedColIndex colIndex currentVal
-
+					trueCallback currentVal = updateMatrix matrixBox startPoint currentPoint currentVal

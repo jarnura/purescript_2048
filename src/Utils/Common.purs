@@ -5,20 +5,24 @@ import Prelude
 import Data.Array (replicate, updateAt, (!!))
 import Data.Maybe (fromMaybe)
 
+data Directions = LEFT | UP | RIGHT | DOWN
+type Index = {x :: Int , y :: Int}
+type FinalCellData = {val :: Int , index :: Index}
+
 matSize :: Int
 matSize = 4
 
 squareWidth :: Int
 squareWidth = 100
 
-updateMatrix' :: Array (Array Int) -> Int -> Int -> Int -> Array (Array Int)
-updateMatrix' matrixBox rowIndex colIndex value =
-	fromMaybe matrixBox $ updateAt rowIndex (getUpdateColValue (getCurrentRow matrixBox rowIndex) colIndex value ) matrixBox
+updateMatrix' :: Array (Array Int) -> Index -> Int -> Array (Array Int)
+updateMatrix' matrixBox point value =
+	fromMaybe matrixBox $ updateAt point.x (getUpdateColValue (getCurrentRow matrixBox point.x) point.y value ) matrixBox
 
-getValFromMatrix :: Array (Array Int) -> Int -> Int -> Int
-getValFromMatrix matrix rowIndex colIndex =
-	let rowData = fromMaybe getEmptyRow (matrix !! rowIndex)
-		in fromMaybe 0 (rowData !! colIndex)
+getValFromMatrix :: Array (Array Int) -> Index -> Int
+getValFromMatrix matrix point =
+	let rowData = fromMaybe getEmptyRow (matrix !! point.x)
+		in fromMaybe 0 (rowData !! point.y)
 
 getUpdateColValue :: Array Int -> Int -> Int -> Array Int
 getUpdateColValue rowData index value = fromMaybe rowData (updateAt index value rowData)
@@ -30,5 +34,10 @@ getEmptyRow :: Array Int
 getEmptyRow = replicate matSize 0
 
 boolean :: forall a . (Unit -> a) -> (Unit -> a) -> Boolean -> a
-boolean falseCallback trueCallback boolValue | boolValue = trueCallback unit 
-											 | otherwise = falseCallback unit
+boolean falseCallback trueCallback boolValue | boolValue = trueCallback unit | otherwise = falseCallback unit
+
+makeIndex :: Int -> Int -> Index
+makeIndex x y = {x,y}
+
+mkFinalCellData :: Int -> Index -> FinalCellData
+mkFinalCellData val index = {val , index}

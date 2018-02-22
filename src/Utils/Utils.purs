@@ -9,25 +9,23 @@ import Data.Monoid (mempty)
 import Data.Array ((!!),(..),concat,replicate,foldl,cons,length,filter)
 import Data.Int (toNumber,floor)
 import Data.UInt (toString , fromInt)
-import Data.StrMap (StrMap,insert,empty,lookup)
+import Data.StrMap (lookup)
 import Data.Maybe (fromMaybe,Maybe(Just,Nothing),maybe')
 
-import Utils.Movement (moveUp,moveDown,moveLeft,moveRight, moveCommon)
-import Utils.Common (boolean, getValFromMatrix, matSize, squareWidth, updateMatrix')
-import Utils.ColorSchema (color0, color1024, color128, color16, color2, color2048, color256, color32, color4, color512, color64, color8, defaultColor, textColor)
+import Utils.Movement (move)
+import Utils.Common (Index, Directions(UP,DOWN,LEFT,RIGHT), boolean, getValFromMatrix, matSize, squareWidth, updateMatrix', makeIndex)
+import Utils.ColorSchema (defaultColor, textColor)
+import Utils.Config (colorsPair)
 
 foreign import logAny :: forall a . a -> Unit
 foreign import getCachedMatrix :: (forall r. r -> Maybe r) -> (forall r. Maybe r) -> Maybe (Array (Array Int))
 foreign import storeMatrix :: Array (Array Int) -> Unit
 foreign import random :: Int -> Int
 
-type Index = {x :: Int , y :: Int}
 type Point = {x :: Number , y :: Number , index :: Index}
 type Square = { x :: Number , y :: Number , w :: Number , h :: Number , color :: Color}
 type TextData = { text :: String , x :: Number , y :: Number , font :: Font , style :: FillStyle}
 type CellData = {square :: Square , textData :: TextData}
-
-data Directions = LEFT | UP | RIGHT | DOWN
 
 allowedKeys :: Array Int
 allowedKeys = [37,38,39,40]
@@ -45,15 +43,6 @@ makeDimensions x y = let arrRange = (0 .. (matSize - 1)) in concat $ map (makeRo
     makeRow arrRange rowIndex = map (makeCol rowIndex) arrRange
     makeCol :: Int -> Int -> Point
     makeCol rowIndex colIndex = { x : (toNumber (x + rowIndex * squareWidth)), y : (toNumber (y + colIndex * squareWidth)) , index : (makeIndex colIndex rowIndex) }
-
-makeIndex :: Int -> Int -> Index
-makeIndex x y = {x,y}
-
-colorsPair :: StrMap Color
-colorsPair = insert "0" color0 <<< insert "2" color2 <<< insert "4" color4 <<<
-			 insert "8" color8 <<< insert "16" color16 <<< insert "32" color32 <<<
-			 insert "64" color64 <<< insert "128" color128 <<< insert "256" color256 <<< 
-			 insert "512" color512 <<< insert "1024" color1024 <<< insert "2048" color2048 $ empty
 
 printPosition :: Int -> Array (Array Int)
 printPosition set 	| (eq 37 set) = makeDecision LEFT
@@ -74,7 +63,7 @@ makeDecision directions =
 	let emptyPositions = getEmptyPositions updatedMatrix in
 	let positionToChange = fromMaybe getDefaultIndex (getRandomPositions emptyPositions) in
 	let valToInsert = fromMaybe 2 (getRandomPositions possibleRandomValues) in
-	let updatedMatrix' = updateMatrix' updatedMatrix positionToChange.x positionToChange.y valToInsert in
+	let updatedMatrix' = updateMatrix' updatedMatrix positionToChange valToInsert in
 	storeAndReturnMatrix updatedMatrix'
 
 getAndSetMatrix :: Array (Array Int)
@@ -102,14 +91,14 @@ getEmptyPositions matrixBox =
 
 		updateZeroArray :: Int -> Array Index -> Int -> Array Index
 		updateZeroArray rowIndex accumulator colIndex = 
-			let currentVal = getValFromMatrix matrixBox rowIndex colIndex in
+			let currentVal = getValFromMatrix matrixBox (makeIndex rowIndex colIndex) in
 			boolean (const $ accumulator) (const $ cons (makeIndex rowIndex colIndex) accumulator ) (eq currentVal 0)
 
 callRequiredFunctions :: Directions -> Array (Array Int) -> Array (Array Int)
-callRequiredFunctions UP = moveUp (0 .. (matSize-2)) (0 .. (matSize-1))
-callRequiredFunctions DOWN = moveDown ((matSize-1) .. 1) (0 .. (matSize-1))
-callRequiredFunctions LEFT = moveLeft (0 .. (matSize-1)) (0 .. (matSize-2))
-callRequiredFunctions RIGHT = moveCommon 1 0 -1 -1 (matSize-1) (0 .. (matSize-2)) (0 .. (matSize-1))
+callRequiredFunctions UP = move UP (0 .. (matSize-2)) (0 .. (matSize-1))
+callRequiredFunctions DOWN = move DOWN ((matSize-1) .. 1) (0 .. (matSize-1))
+callRequiredFunctions LEFT = move LEFT (0 .. (matSize-1)) (0 .. (matSize-2))
+callRequiredFunctions RIGHT = move RIGHT (0 .. (matSize-1)) ((matSize-1) .. 1)
 
 ------ Cook Matrix Data -----------
 mkMatrixData :: Array Point -> Array (Array Int) -> Array CellData
@@ -117,7 +106,7 @@ mkMatrixData dimensions matrix = map mkCellData dimensions
 	where
 		mkCellData :: Point -> CellData
 		mkCellData point = 
-			let matVal = getValFromMatrix matrix point.index.x point.index.y in
+			let matVal = getValFromMatrix matrix point.index in
 			let color = fromMaybe defaultColor $ lookup (toString $ fromInt matVal) colorsPair in
 			let square = {x : point.x , y :  point.y , w : (toNumber squareWidth) , h : (toNumber squareWidth) , color} in
 			let textData = mkTextData point matVal in 
