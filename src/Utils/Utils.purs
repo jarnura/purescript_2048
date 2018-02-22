@@ -12,7 +12,7 @@ import Data.UInt (toString , fromInt)
 import Data.StrMap (StrMap,insert,empty,lookup)
 import Data.Maybe (fromMaybe,Maybe(Just,Nothing),maybe')
 
-import Utils.Movement (moveUp,moveDown,moveLeft,moveRight)
+import Utils.Movement (moveUp,moveDown,moveLeft,moveRight, moveCommon)
 import Utils.Common (boolean, getValFromMatrix, matSize, squareWidth, updateMatrix')
 import Utils.ColorSchema (color0, color1024, color128, color16, color2, color2048, color256, color32, color4, color512, color64, color8, defaultColor, textColor)
 
@@ -109,7 +109,7 @@ callRequiredFunctions :: Directions -> Array (Array Int) -> Array (Array Int)
 callRequiredFunctions UP = moveUp (0 .. (matSize-2)) (0 .. (matSize-1))
 callRequiredFunctions DOWN = moveDown ((matSize-1) .. 1) (0 .. (matSize-1))
 callRequiredFunctions LEFT = moveLeft (0 .. (matSize-1)) (0 .. (matSize-2))
-callRequiredFunctions RIGHT = moveRight (0 .. (matSize-1)) ((matSize-1) .. 1)
+callRequiredFunctions RIGHT = moveCommon 1 0 -1 -1 (matSize-1) (0 .. (matSize-2)) (0 .. (matSize-1))
 
 ------ Cook Matrix Data -----------
 mkMatrixData :: Array Point -> Array (Array Int) -> Array CellData
